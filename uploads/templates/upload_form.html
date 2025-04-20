@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload para o Google Drive</title>
+    <style>
+        #progressContainer {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 5px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #progressBar {
+            width: 0%;
+            height: 20px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 20px;
+            color: white;
+            border-radius: 5px;
+        }
+
+        #status {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Enviar Arquivos para o Google Drive</h2>
+
+    <form id="uploadForm">
+        {% csrf_token %}
+        <input type="file" name="arquivos" id="arquivo" required multiple>
+        <button type="submit">Enviar</button>
+    </form>
+
+    <div id="progressContainer">
+        <div id="progressBar">0%</div>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        const statusDiv = document.getElementById('status');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Impede envio normal
+
+            const fileInput = document.getElementById('arquivo');
+            const files = fileInput.files;
+
+            if (files.length === 0) {
+                alert('Selecione pelo menos um arquivo.');
+                return;
+            }
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('arquivos', files[i]);
+            }
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '{% url "upload" %}', true);
+            xhr.setRequestHeader('X-CSRFToken', csrfToken);
+
+            progressContainer.style.display = 'block';
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = percent + '%';
+                }
+            });
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.mensagem) {
+                        let detalhes = '';
+                        if (response.detalhes && Array.isArray(response.detalhes)) {
+                            detalhes = '<ul>' + response.detalhes.map(m => `<li>✅ ${m}</li>`).join('') + '</ul>';
+                        }
+                        statusDiv.innerHTML = `<p style="color:green; font-weight: bold;">${response.mensagem}</p>${detalhes}`;
+                        
+                        // Resetar barra e form
+                        progressContainer.style.display = 'none';
+                        progressBar.style.width = '0%';
+                        progressBar.textContent = '0%';
+
+                        setTimeout(() => {
+                            statusDiv.innerHTML = '';
+                            form.reset();
+                        }, 5000);
+                    } else {
+                        statusDiv.innerHTML = `<p style="color:red;">❌ ${response.erro}</p>`;
+                    }
+                } else {
+                    statusDiv.innerHTML = '<p style="color:red;">Erro no envio.</p>';
+                }
+            };
+
+            xhr.send(formData);
+        });
+    </script>
+</body>
+</html>
